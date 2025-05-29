@@ -1,53 +1,39 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+const core = require('@actions/core');
+const github = require('@actions/github');
+const exec = require('@actions/exec');
 
-const fs = require("fs");
+module.exports = async ({ github, context }) => {
+  try {
+    // 示例：执行 `ls -la` 并获取输出
+    let output = '';
+    const options = {
+      listeners: {
+        stdout: (data) => {
+          output += data.toString();
+        }
+      }
+    };
 
-function haveISSUESID(title) {
-  if (!title) {
-    return false;
-  }
-  return /^\[GLUTEN-\d+\]/.test(title);
-}
+    await exec.exec('ls', ['-la'], options);
+    console.log('Command output:', output);
 
-async function commentOpenISSUESIssue(github, context, pullRequestNumber) {
-  const {data: comments} = await github.rest.issues.listComments({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: pullRequestNumber,
-    per_page: 1
-  });
-  if (comments.length > 0) {
-    return;
-  }
-  const commentPath = ".github/workflows/dev_cron/title_check.md";
-  const comment = fs.readFileSync(commentPath).toString();
-  await github.rest.issues.createComment({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    issue_number: pullRequestNumber,
-    body: comment
-  });
-}
+    // 示例：执行带变量的命令
+    await exec.exec('echo', ['Hello, $USER'], { env: { USER: 'GitHub' } });
 
-module.exports = async ({github, context}) => {
-  const pullRequestNumber = context.payload.number;
-  const title = context.payload.pull_request.title;
-  if (!haveISSUESID(title)) {
-    await commentOpenISSUESIssue(github, context, pullRequestNumber);
+    // 示例：执行多行脚本
+    await exec.exec('bash', ['-c', 'echo "Running a script" && ls']);
+
+    // 其他 GitHub 操作（如评论 PR）
+    const { pull_request: pr } = context.payload;
+    const comment = `Command executed:\n\`\`\`\n${output}\n\`\`\``;
+
+    await github.rest.issues.createComment({
+      issue_number: pr.number,
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      body: comment
+    });
+  } catch (error) {
+    core.setFailed(`Error executing command: ${error.message}`);
   }
 };
